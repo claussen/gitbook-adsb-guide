@@ -82,7 +82,7 @@ sudo modprobe -r rtl2838
 Next we rebuild the module dependency database with this command:
 
 ```bash
-depmod -a
+sudo depmod -a
 ```
 
 This may appear to initially not be doing anything, but after a short wait will begin outputting many lines of status updates as it runs until it finishes.
