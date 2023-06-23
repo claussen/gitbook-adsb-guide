@@ -6,7 +6,7 @@ description: 'If you wish to feed PlaneFinder, follow the steps below.'
 
 [PlaneFinder](https://planefinder.net/) provides live flight tracking data to industries around the world with customised products for aviation, business intelligence and emerging markets alongside world class apps.
 
-The docker image [`mikenye/planefinder`](https://github.com/mikenye/docker-planefinder) contains PlaneFinder's `pfclient` feeder software and all of its required prerequisites and libraries. This needs to run in conjunction with `readsb` \(or another Beast provider\).
+The docker image [`ghcr.io/sdr-enthusiasts/docker-planefinder`](https://github.com/sdr-enthusiasts/docker-planefinder) contains PlaneFinder's `pfclient` feeder software and all of its required prerequisites and libraries. This needs to run in conjunction with `ultrafeeder` \(or another Beast provider\).
 
 ## Getting a Share Code
 
@@ -33,7 +33,7 @@ docker run \
     --name pfclient_temp \
     --entrypoint pfclient \
     -p 30053:30053 \
-    mikenye/planefinder
+    ghcr.io/sdr-enthusiasts/docker-planefinder
 ```
 
 Once the container has started, you should see a message such as:
@@ -79,13 +79,13 @@ PLANEFINDER_SHARECODE=zg84632abhf231
 
 ## Deploying `pfclient` container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file \(inside the `services:` section\):
 
 ```yaml
   pfclient:
-    image: mikenye/planefinder:latest
+    image: ghcr.io/sdr-enthusiasts/docker-planefinder:latest
     tty: true
     container_name: pfclient
     restart: always
@@ -93,7 +93,7 @@ Append the following lines to the end of the file \(inside the `services:` secti
       - 30053:30053
     environment:
       - TZ=${FEEDER_TZ}
-      - BEASTHOST=readsb
+      - BEASTHOST=ultrafeeder
       - LAT=${FEEDER_LAT}
       - LONG=${FEEDER_LONG}
       - SHARECODE=${PLANEFINDER_SHARECODE}
@@ -104,9 +104,9 @@ Append the following lines to the end of the file \(inside the `services:` secti
 
 To explain what's going on in this addition:
 
-* We're creating a container called `pfclient`, from the image `mikenye/planefinder:latest`.
+* We're creating a container called `pfclient`, from the image `ghcr.io/sdr-enthusiasts/docker-planefinder:latest`.
 * We're passing several environment variables to the container:
-  * `BEASTHOST=readsb` to inform the feeder to get its ADSB data from the container `readsb`
+  * `BEASTHOST=ultrafeeder` to inform the feeder to get its ADSB data from the container `ultrafeeder`
   * `TZ` will use the `FEEDER_TZ` variable from your `.env` file.
   * `LAT` will use the `FEEDER_LAT` variable from your `.env` file.
   * `LONG` will use the `FEEDER_LONG` variable from your `.env` file.
@@ -115,17 +115,16 @@ To explain what's going on in this addition:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `pfclient` container. You should see the following output:
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `pfclient` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 piaware is up-to-date
 fr24 is up-to-date
 Creating pfclient
 ```
 
-We can view the logs for the environment with the command `docker-compose logs`, or continually "tail" them with `docker-compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
+We can view the logs for the environment with the command `docker compose logs`, or continually "tail" them with `docker compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
 
 ```text
 pfclient          | [s6-init] making user provided files available at /var/run/s6/etc...exited 0.
@@ -140,7 +139,7 @@ pfclient          | [services.d] starting services
 pfclient          | [services.d] done.
 pfclient          | 2020-04-11 09:14:33.361261 [-] pfclient (4.1.1 i386) started with the following options:
 pfclient          | 2020-04-11 09:14:33.361432 [-]      connection_type = 1
-pfclient          | 2020-04-11 09:14:33.361437 [-]      tcp_address = readsb
+pfclient          | 2020-04-11 09:14:33.361437 [-]      tcp_address = ultrafeeder
 pfclient          | 2020-04-11 09:14:33.361440 [-]      tcp_port = 30005
 pfclient          | 2020-04-11 09:14:33.361442 [-]      data_format = 1
 pfclient          | 2020-04-11 09:14:33.361445 [-]      aircraft_timeout = 30
@@ -151,7 +150,7 @@ pfclient          | 2020-04-11 09:14:33.361458 [-]      user_longitude = 111.111
 pfclient          | 2020-04-11 09:14:33.361539 [V] Performing NTP sync (1.planefinder.pool.ntp.org)...
 pfclient          | 2020-04-11 09:14:33.361679 [-] Web server is now listening on: http://172.99.7.64:30053
 pfclient          | 2020-04-11 09:14:33.361698 [-] Echo port is now listening on: 172.99.7.64:30054
-pfclient          | 2020-04-11 09:14:33.362179 [-] TCP connection established: readsb:30005
+pfclient          | 2020-04-11 09:14:33.362179 [-] TCP connection established: ultrafeeder:30005
 pfclient          | 2020-04-11 09:14:33.723215 [V] NTP sync succeeded with settings:
 pfclient          | 2020-04-11 09:14:33.723269 [V]      Stratum: 3
 pfclient          | 2020-04-11 09:14:33.723287 [V]      System clock time: 1586596473.7232
@@ -164,4 +163,3 @@ pfclient          | 2020-04-11 09:20:04.389081 [-] Successfully sent 53 aircraft
 ```
 
 Once running, you can visit `http://docker.host.ip.addr:30053` to access the `pfclient` web interface. You can also visit the PlaneFinder website, and go to "Account" &gt; "Manage Receivers" and click your receiver to see your live data and statistics.
-

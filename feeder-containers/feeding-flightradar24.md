@@ -8,7 +8,7 @@ description: 'If you wish to feed FlightAware, follow the steps below.'
 
 `fr24feed` is a FlightRadar24 client program to securely transmit ADS-B and Mode S data to the commercial entity FlightRadar24.
 
-I've created a docker image [`mikenye/fr24feed`](https://github.com/mikenye/docker-flightradar24) that contains `fr24feed` and all of its required prerequisites and libraries.
+We've created a docker image [`ghcr.io/sdr-enthusiasts/docker-flightradar24`](https://github.com/sdr-enthusiasts/docker-flightradar24) that contains `fr24feed` and all of its required prerequisites and libraries.
 
 ## Getting a Sharing Key
 
@@ -28,7 +28,7 @@ If you're already feeding FlightRadar24 and you've followed the steps in the pre
 
 First-time users should obtain a FlightRadar24 sharing key \(a _fr24key_\). To get one, you can run through the sign-up process. This will ask a series of questions allowing you to sign up with FlightRadar24 and get a _fr24key_.
 
-There's an automated script that you can run, however if this breaks \(please let me know so I can fix it\), you can also use the manual sign-up method.
+There's an automated script that you can run, however if this breaks please let us know by raising an issue on [GitHub](https://github.com/sdr-enthusiasts/docker-flightradar24/issues). You can also use the manual sign-up method.
 
 #### Automatic Sign-Up Script Method
 
@@ -44,7 +44,7 @@ docker run \
   -e FEEDER_ALT_FT="$FEEDER_ALT_FT" \
   -e FR24_EMAIL="YOUR@EMAIL.ADDRESS" \
   --entrypoint /scripts/signup.sh \
-  mikenye/fr24feed
+  ghcr.io/sdr-enthusiasts/docker-flightradar24
 ```
 
 Be sure to replace `YOUR@EMAIL.ADDRESS` with your actual email address!
@@ -65,7 +65,7 @@ If something went wrong, please take a moment to let me know, then try the manua
 Run the command:
 
 ```text
-docker run --rm -it --entrypoint fr24feed mikenye/fr24feed --signup
+docker run --rm -it --entrypoint fr24feed ghcr.io/sdr-enthusiasts/docker-flightradar24 --signup
 ```
 
 This will take you through the sign-up process. At the end of the sign-up process, you'll be presented with:
@@ -92,51 +92,44 @@ FR24_SHARING_KEY=10ae138d0c1g
 
 ## Deploying `fr24feed` container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file \(inside the `services:` section\):
 
 ```yaml
   fr24:
-    image: mikenye/fr24feed:latest
+    image: ghcr.io/sdr-enthusiasts/docker-flightradar24:latest
     tty: true
     container_name: fr24
     restart: always
-    depends_on:
-      - readsb
     ports:
       - 8754:8754
     environment:
-      - BEASTHOST=readsb
-      - TZ=${FEEDER_TZ}
+      - BEASTHOST=ultrafeeder
       - FR24KEY=${FR24_SHARING_KEY}
-      - MLAT=yes
     tmpfs:
       - /var/log
 ```
 
 To explain what's going on in this addition:
 
-* We're creating a container called `fr24`, from the image `mikenye/fr24feed:latest`.
+* We're creating a container called `fr24`, from the image `ghcr.io/sdr-enthusiasts/docker-flightradar24:latest`.
 * We're passing several environment variables to the container:
-  * `BEASTHOST=readsb` to inform the feeder to get its ADSB data from the container `readsb` network.
-  * `TZ` will use the `FEEDER_TZ` variable from your `.env` file.
+  * `BEASTHOST=ultrafeeder` to inform the feeder to get its ADSB data from the container `ultrafeeder` network.
   * `FR24KEY` will use the `FR24_SHARING_KEY` variable from your `.env` file.
-  * We're enabling MLAT with `MLAT=yes`.
 * We're using `tmpfs` for volumes that have regular I/O. Any files stored in a `tmpfs` mount are temporarily stored outside the container's writable layer. This helps to reduce:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `fr24` container. You should see the following output:
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `fr24` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 piaware is up-to-date
 Creating fr24
 ```
 
-We can view the logs for the environment with the command `docker-compose logs`, or continually "tail" them with `docker-compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
+We can view the logs for the environment with the command `docker compose logs`, or continually "tail" them with `docker compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
 
 ```text
 [s6-init] making user provided files available at /var/run/s6/etc...exited 0.
@@ -171,4 +164,3 @@ We can view the logs for the environment with the command `docker-compose logs`,
 ```
 
 Once running, you can visit `http://docker.host.ip.addr:8754` to access the `fr24feed` web interface. You can also log onto FlightRadar24's website and click on the your profile button, and then "My data sharing" link to see your statistics.
-

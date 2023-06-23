@@ -6,7 +6,7 @@ description: 'If you wish to feed OpenSky Network, follow the steps below.'
 
 The [OpenSky Network](https://opensky-network.org/) is a non-profit association based in Switzerland. It aims at improving the security, reliability and efficiency of the air space usage by providing open access of real-world air traffic control data to the public.
 
-The docker image [`mikenye/opensky-network`](https://github.com/mikenye/docker-opensky-network) contains the required feeder software and all required prerequisites and libraries. This needs to run in conjunction with `readsb` \(or another Beast provider\).
+The docker image [`ghcr.io/sdr-enthusiasts/docker-opensky-network`](https://github.com/sdr-enthusiasts/docker-opensky-network) contains the required feeder software and all required prerequisites and libraries. This needs to run in conjunction with `ultrafeeder` \(or another Beast provider\).
 
 ## Obtaining an OpenSky Network Feeder Serial Number
 
@@ -25,9 +25,9 @@ timeout 60s docker run \
     -e LAT=YOURLATITUDE \
     -e LONG=YOURLONGITUDE \
     -e ALT=YOURALTITUDE \
-    -e BEASTHOST=readsb\
+    -e BEASTHOST=ultrafeeder\
     -e OPENSKY_USERNAME=YOUROPENSKYUSERNAME \
-    mikenye/opensky-network
+    ghcr.io/sdr-enthusiasts/docker-opensky-network
 ```
 
 Be sure to change the following:
@@ -128,19 +128,19 @@ Failure to specify the `OPENSKY_SERIAL` environment variable will cause a new fe
 
 ## Deploying feeder container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file \(inside the `services:` section\):
 
 ```yaml
   opensky:
-    image: mikenye/opensky-network:latest
+    image: ghcr.io/sdr-enthusiasts/docker-opensky-network:latest
     tty: true
     container_name: opensky
     restart: always
     environment:
       - TZ=${FEEDER_TZ}
-      - BEASTHOST=readsb
+      - BEASTHOST=ultrafeeder
       - LAT=${FEEDER_LAT}
       - LONG=${FEEDER_LONG}
       - ALT=${FEEDER_ALT_M}
@@ -153,9 +153,9 @@ Append the following lines to the end of the file \(inside the `services:` secti
 
 To explain what's going on in this addition:
 
-* We're creating a container called `opensky`, from the image `mikenye/opensky-network:latest`.
+* We're creating a container called `opensky`, from the image `ghcr.io/sdr-enthusiasts/docker-opensky-network:latest`.
 * We're passing several environment variables to the container:
-  * `BEASTHOST=readsb` to inform the feeder to get its ADSB data from the container `readsb`
+  * `BEASTHOST=ultrafeeder` to inform the feeder to get its ADSB data from the container `ultrafeeder`
   * `TZ` will use the `FEEDER_TZ` variable from your `.env` file.
   * `LAT` will use the `FEEDER_LAT` variable from your `.env` file.
   * `LONG` will use the `FEEDER_LONG` variable from your `.env` file.
@@ -166,11 +166,10 @@ To explain what's going on in this addition:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `adsbhub` container. You should see the following output:
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `adsbhub` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 piaware is up-to-date
 fr24 is up-to-date
 pfclient is up-to-date
@@ -212,8 +211,8 @@ We can view the logs for the environment with the command `docker logs opensky`,
 [opensky-feeder] [INFO] [COMP] Start RC
 [opensky-feeder] [INFO] [COMP] Start FILTER
 [opensky-feeder] [INFO] [COMP] Start RECV
-[opensky-feeder] [INFO] [INPUT] Trying to connect to 'readsb': [172.30.0.6]:30005
-[opensky-feeder] [INFO] [INPUT] connected to 'readsb'
+[opensky-feeder] [INFO] [INPUT] Trying to connect to 'ultrafeeder': [172.30.0.6]:30005
+[opensky-feeder] [INFO] [INPUT] connected to 'ultrafeeder'
 [opensky-feeder] [INFO] [NET] Trying to connect to 'collector.opensky-network.org': [194.209.200.4]:10004
 [opensky-feeder] [INFO] [NET] connected to 'collector.opensky-network.org'
 [opensky-feeder] [INFO] [LOGIN] Sending Device ID 5, Version 2.1.7
@@ -225,4 +224,3 @@ We can view the logs for the environment with the command `docker logs opensky`,
 ```
 
 Once running, you can visit [https://opensky-network.org/receiver-profile](https://opensky-network.org/receiver-profile) to view the data you are feeding to OpenSky-Network.
-

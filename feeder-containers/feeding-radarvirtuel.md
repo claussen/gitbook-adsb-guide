@@ -4,22 +4,22 @@ description: 'If you wish to feed RadarVirtuel, follow the steps below.'
 
 # Feeding RadarVirtuel
 
-The main goal of [RadarVirtuel](https://radarvirtuel.com/) is to collect data about flights. Although RadarVirtuel welcomes feeding stations from all over the world, their differentiator is to collect information about traffic around smaller airports around the world.
+The main goal of [RadarVirtuel](https://www.radarvirtuel.com/) is to collect data about flights. Although RadarVirtuel welcomes feeding stations from all over the world, their differentiator is to collect information about traffic around smaller airports around the world.
 
-The docker image [`kx1t/radarvirtuel`](https://github.com/kx1t/docker-radarvirtuel) contains the required feeder software and all required prerequisites and libraries. This needs to run in conjunction with `readsb`, `tar1090`, or another RAW provider.
+The docker image [`ghcr.io/sdr-enthusiasts/docker-radarvirtuel`](https://github.com/sdr-enthusiasts/docker-radarvirtuel) contains the required feeder software and all required prerequisites and libraries. This needs to run in conjunction with `ultrafeeder`, `tar1090`, or another RAW provider.
 
 ## Setting up Your Station
 
 ### Obtaining an RadarVirtuel Feeder Key
 
-First-time users should obtain a RadarVirtuel Feeder key. To request one, email support@adsbnetwork.com with the following information:
+First-time users should obtain a RadarVirtuel Feeder key. To request one, email [support@adsbnetwork.com](mailto:support@adsbnetwork.com) with the following information:
 
 * Your name
 * The Lat/Lon and nearest airport of your station
 * Your Raspberry Pi model (or other hardware if not Raspberry Pi)
 * Mention that you will feed using a Docker container.
 
-### Update `.env` file with ADSBHub Station Key
+### Update `.env` file with RadarVirtuel Feeder Key
 
 Inside your application directory \(`/opt/adsb`\), edit the `.env` file using your favorite text editor. Beginners may find the editor `nano` easy to use:
 
@@ -27,7 +27,7 @@ Inside your application directory \(`/opt/adsb`\), edit the `.env` file using yo
 nano /opt/adsb/.env
 ```
 
-This file holds all of the commonly used variables \(such as our latitude, longitude and altitude\). We're going to add our ADSBHub Station Key to this file. Add the following line to the file:
+This file holds all of the commonly used variables \(such as our latitude, longitude and altitude\). We're going to add our RadarVirtuel Feeder Key to this file. Add the following line to the file:
 
 ```text
 RV_FEEDER_KEY=YOURFEEDERKEY
@@ -43,24 +43,27 @@ RV_FEEDER_KEY=xxxx:432143214473214732017432014747382140723
 
 ### Deploying feeder container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
-Append the following lines to the end of the file \(inside the `services:` section\). If you aren't running the `tar1090` container, then make these replacements: `SOURCE_HOST=readsb:30002` and `depends_on: readsb`:
+Append the following lines to the end of the file \(inside the `services:` section\).
 
 ```yaml
   radarvirtuel:
-    image: kx1t/radarvirtuel
+    image: ghcr.io/sdr-enthusiasts/docker-radarvirtuel:latest
     tty: true
     container_name: radarvirtuel
     hostname: radarvirtuel
     restart: always
     environment:
       - FEEDER_KEY=${RV_FEEDER_KEY}
-      - SOURCE_HOST=tar1090:30002
-      - RV_SERVER=mg2.adsbnetwork.com:50050
+      - SOURCE_HOST=ultrafeeder:30002
+      - RV_SERVER=mg22.adsbnetwork.com:50050
       - VERBOSE=OFF
-    depends_on:
-      - tar1090
+      - MLAT_SERVER=mlat.adsbnetwork.com:50000
+      - MLAT_HOST=ultrafeeder:30005
+      - LAT=${FEEDER_LAT}
+      - LON=${FEEDER_LONG}
+      - ALT=${FEEDER_ALT_M}
     tmpfs:
       - /tmp:rw,nosuid,nodev,noexec,relatime,size=128M
     volumes:
@@ -70,19 +73,33 @@ Append the following lines to the end of the file \(inside the `services:` secti
 
 To explain what's going on in this addition:
 
-* We're creating a container called `radarvirtuel`, from the image `kx1t/radarvirtuel`.
+* We're creating a container called `radarvirtuel`, from the image `ghcr.io/sdr-enthusiasts/docker-radarvirtuel`.
 * We're passing several environment variables to the container:
   * `FEEDER_KEY` contains the key that you added to `.env` as per the instructions above
   * `SOURCE_HOST` indicates where to get the RAW data from
   * `RV_SERVER` is the address of the RadarVirtuel server where your data will be sent. Please do not change this unless you're specifically instructed to
   * `VERBOSE` can be `ON` (meaning: show lots of information in the docker logs) or `OFF` (show only errors in the docker logs)
+  * Enabling receiving MLAT RAW data and sending latitude, longitude and altitude from the .env file
 * The mounted volumes make sure that the container will use the same timezone as your host system
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `radarvirtuel` container. You should see the following output:
+## Update `ultrafeeder` container configuration
+
+Before running `docker compose`, we also want to update the configuration of the `ultrafeeder` container, so that it generates MLAT data for piaware.
+
+Open the `docker-compose.yml` and make the following environment value is part of the `ULTRAFEEDER_CONFIG` variable to the `ultrafeeder` service:
+
+```yaml
+      - ULTRAFEEDER_CONFIG=mlathub,radarvirtuel,30105,beast_in;
+```
+
+To explain this addition, the `ultrafeeder` container will connect to the `radarvirtuel` container on port `30105` and receive MLAT data. This data will then be included in any outbound data streams from `ultrafeeder`.
+
+## Refresh running containers
+
+Once the file has been updated, issue the command `docker compose pull radarvirtuel && docker compose up -d` in the application directory to apply the changes and bring up the `radarvirtuel` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 piaware is up-to-date
 fr24 is up-to-date
 pfclient is up-to-date
@@ -110,16 +127,14 @@ Once running, you can visit [https://alpha.radarvirtuel.com/stations/xxxx](https
 
 Most log messages are self-explanatory and have suggestions on how to trouble-shoot your issue. Here is some additional information that may help:
 
-* Sometimes, the logs may show error messages that it cannot connect to your `SOURCE_HOST`. If these messages show every few seconds, you have a problem (read below). If there are no new messages after a bit, it means that your station finally connected to the `SOURCE_HOST`. This connection delay is often caused by RadarVirtuel becoming "up and running" before `tar1090` or `readsb` do. This will fix itself within less than a minute.
-* This message keeps on scrolling and it doesn't stop after a while. In that case, `tar1090` or `readsb` cannot be reached.
-  * If you configured `readsb`, try adding this parameter to the `environment:` section in `docker-compose.yml`:
-    `- READSB_NET_RAW_OUTPUT_PORT=30002`
+* Sometimes, the logs may show error messages that it cannot connect to your `SOURCE_HOST`. If these messages show every few seconds, you have a problem (read below). If there are no new messages after a bit, it means that your station finally connected to the `SOURCE_HOST`. This connection delay is often caused by RadarVirtuel becoming "up and running" before `tar1090` or `ultrafeeder` do. This will fix itself within less than a minute.
+* This message keeps on scrolling and it doesn't stop after a while. In that case, `tar1090` or `ultrafeeder` cannot be reached.
   * If you configured `tar1090`, there's nothing else to configure. Make sure the `tar1090` container is up and running and is receiving data!
 * You see log messages about the Feeder Key being incorrect. This is quite self-explanatory: check your feeder key.
-* You see messages about not being able to reach the RadarVirtuel Server. This may be a temporary outage. If the message consists for several hours, please contact support@adsbnetwork.com to see if there's something going on.
+* You see messages about not being able to reach the RadarVirtuel Server. This may be a temporary outage. If the message consists for several hours, please contact [support@adsbnetwork.com](mailto:support@adsbnetwork.com) to see if there's something going on.
 
 ## More information and support
 
-* There is extensive documentation available on the container's [GitHub](https://github.com/kx1t/docker-radarvirtuel) page.
-* RadarVirtuel and ADSBNetwork are owned and operated by Laurent Duval, who can be reached at support@adsbnetwork.com
+* There is extensive documentation available on the container's [GitHub](https://github.com/sdr-enthusiasts/docker-radarvirtuel) page.
+* RadarVirtuel and ADSBNetwork are owned and operated by Laurent Duval, who can be reached at [support@adsbnetwork.com](mailto:support@adsbnetwork.com)
 * You can always find help on the #adsb-containers channel on the [SDR Enthusiasts Discord server](https://discord.gg/m42azbZydy). This channel is meant for Noobs (beginners) and Experts alike.

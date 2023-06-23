@@ -10,9 +10,7 @@ description: 'If you wish to feed AirNav RadarBox, follow the steps below.'
 
 In exchange for your data, RadarBox will give you a Business Plan. If this is something of interest, you may wish to feed your data to them.
 
-Personally, I really like their visualisation. Overlaying the flight data with precipitation and cloud cover looks fantastic.
-
-The docker image [`mikenye/radarbox`](https://github.com/mikenye/docker-radarbox) contains `rbfeeder` and all of its required prerequisites and libraries. This needs to run in conjunction with `readsb` \(or another Beast provider\).
+The docker image [`ghcr.io/sdr-enthusiasts/docker-radarbox`](https://github.com/sdr-enthusiasts/docker-radarbox) contains `rbfeeder` and all of its required prerequisites and libraries. This needs to run in conjunction with `ultrafeeder` \(or another Beast provider\).
 
 ## Getting a Sharing Key
 
@@ -30,17 +28,17 @@ You'll need a _sharing key_. To get one, you can temporarily run the container, 
 Inside your application directory \(`/opt/adsb`\), run the following commands:
 
 ```bash
-docker pull mikenye/radarbox:latest
+docker pull ghcr.io/sdr-enthusiasts/docker-radarbox:latest
 source ./.env
 timeout 60 docker run \
     --rm \
     -it \
     --network adsb_default \
-    -e BEASTHOST=readsb \
+    -e BEASTHOST=ultrafeeder \
     -e LAT=${FEEDER_LAT} \
     -e LONG=${FEEDER_LONG} \
     -e ALT=${FEEDER_ALT_M} \
-    mikenye/radarbox
+    ghcr.io/sdr-enthusiasts/docker-radarbox
 ```
 
 The command will run the container for one minute, which should be ample time for the container to connect to RadarBox receive a sharing key.
@@ -95,7 +93,19 @@ In the output above, see the line:
 
 As you can see from the output above, the sharing key given to us from Radarbox is `g45643ab345af3c5d5g923a99ffc0de9`.
 
-You should now claim your receiver:
+If the script doesn't output the sharing key, it can be found by using the following command:
+
+```bash
+docker exec -it rbfeeder /bin/sh -c "cat /etc/rbfeeder.ini" | grep key
+```
+
+Command output:
+
+```text
+key=g45643ab345af3c5d5g923a99ffc0de9
+```
+
+## Claiming Your Receiver
 
 1. Go to [https://www.radarbox.com/](https://www.radarbox.com/)
 2. Create an account or sign in
@@ -125,60 +135,20 @@ RADARBOX_SHARING_KEY=g45643ab345af3c5d5g923a99ffc0de9
 
 ## Deploying `rbfeeder`
 
-### SegFault Fix
-
-As the `rbfeeder` binary is designed to run on a Raspberry Pi, the `rbfeeder` binary expects a file `/sys/class/thermal/thermal_zone0/temp` to be present, and contain the CPU temperature. If this file doesn't exist, the `rbfeeder` binary will crash and restart every few minutes. For more information, see [here](https://github.com/mikenye/docker-radarbox/issues/16#issuecomment-699627387).
-
-The `mikenye/radarbox` container is multi-architecture, and accordingly you might not be running on a Raspberry Pi.
-
-As a workaround, we can "fake" this file by performing the following additional steps:
-
-#### Create "fake" directory structure
-
-Inside your application directory \(assumed to be`/opt/adsb`\), run the following commands:
-
-```bash
-mkdir -p ./data/radarbox_segfault_fix/thermal_zone0
-echo 24000 > ./data/radarbox_segfault_fix/thermal_zone0/temp
-```
-
-This creates a fake directory structure that contains a fake CPU temperature file that reads 24 degrees Celsius.
-
-#### Create docker volume
-
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
-
-Add the following lines to the `volumes:` section below the `version:` section, and before the `services:` section:
-
-```yaml
-  radarbox_segfault_fix:
-    driver: local
-    driver_opts:
-      type: none
-      device: /opt/adsb/data/radarbox_segfault_fix
-      o: bind
-```
-
-This creates a volume containing our fake directory structure. We will map this through to the feeder container to prevent the SegFault from occurring.
-
 ### Create `rbfeeder` container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file \(inside the `services:` section\):
 
 ```yaml
   rbfeeder:
-    image: mikenye/radarbox:latest
+    image: ghcr.io/sdr-enthusiasts/docker-radarbox:latest
     tty: true
     container_name: rbfeeder
     restart: always
-    depends_on:
-      - readsb
-    volumes:
-      - "radarbox_segfault_fix:/sys/class/thermal:ro"
     environment:
-      - BEASTHOST=readsb
+      - BEASTHOST=ultrafeeder
       - LAT=${FEEDER_LAT}
       - LONG=${FEEDER_LONG}
       - ALT=${FEEDER_ALT_M}
@@ -189,31 +159,52 @@ Append the following lines to the end of the file \(inside the `services:` secti
       - /var/log
 ```
 
+If you are in the USA and are also running the `dump978` container with a second SDR, add the following additional lines to the `environment:` section:
+
+```yaml
+      - UAT_RECEIVER_HOST=dump978
+```
+
 To explain what's going on in this addition:
 
-* We're creating a container called `rbfeeder`, from the image `mikenye/rbfeeder:latest`.
+* We're creating a container called `rbfeeder`, from the image `ghcr.io/sdr-enthusiasts/docker-radarbox:latest`.
 * We're passing several environment variables to the container:
-  * `BEASTHOST=readsb` to inform the feeder to get its ADSB data from the container `readsb` over our private `adsbnet` network.
+  * `BEASTHOST=ultrafeeder` to inform the feeder to get its ADSB data from the container `ultrafeeder` over our private `adsbnet` network.
   * `LAT` will use the `FEEDER_LAT` variable from your `.env` file.
   * `LONG` will use the `FEEDER_LONG` variable from your `.env` file.
   * `ALT` will use the `FEEDER_ALT_M` variable from your `.env` file.
   * `TZ` will use the `FEEDER_TZ` variable from your `.env` file.
   * `SHARING_KEY` will use the `RADARBOX_SHARING_KEY` variable from your `.env` file.
+* For people running `dump978`:
+  * `UAT_RECEIVER_HOST=dump978` specifies the host to pull UAT data from; in this instance our `dump978` container.
 * We're using `tmpfs` for volumes that have regular I/O. Any files stored in a `tmpfs` mount are temporarily stored outside the container's writable layer. This helps to reduce:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `rbfeeder` container. You should see the following output:
+## Update `ultrafeeder` container configuration
+
+Before running `docker compose`, we also want to update the configuration of the `ultrafeeder` container, so that it generates MLAT data for piaware.
+
+Open the `docker-compose.yml` and make the following environment value is part of the `ULTRAFEEDER_CONFIG` variable to the `ultrafeeder` service:
+
+```yaml
+      - ULTRAFEEDER_CONFIG=mlathub,rbfeeder,30105,beast_in;
+```
+
+To explain this addition, the `ultrafeeder` container will connect to the `rbfeeder` container on port `30105` and receive MLAT data. This data will then be included in any outbound data streams from `ultrafeeder`.
+
+## Refresh running containers
+
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `rbfeeder` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 piaware is up-to-date
 fr24 is up-to-date
 Creating rbfeeder
 ```
 
-We can view the logs for the environment with the command `docker-compose logs`, or continually "tail" them with `docker-compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
+We can view the logs for the environment with the command `docker compose logs`, or continually "tail" them with `docker compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
 
 ```text
 [s6-init] making user provided files available at /var/run/s6/etc...exited 0.
@@ -261,4 +252,3 @@ We can view the logs for the environment with the command `docker-compose logs`,
 We can see our container running with the command `docker ps`.
 
 Once running, you can visit the RadarBox website, and go to "Account" &gt; "Stations" and click your station to see your live data.
-

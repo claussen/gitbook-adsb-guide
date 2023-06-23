@@ -10,7 +10,7 @@ description: 'If you wish to feed FlightAware, follow the steps below.'
 
 In exchange for your data, FlightAware will give you an Enterprise Membership. If this is something of interest, you may wish to feed your data to them.
 
-The docker image [`mikenye/piaware`](https://github.com/mikenye/docker-piaware) contains `piaware` and all of its required prerequisites and libraries. This can run standalone \(without the `readsb` container\), however for flexibility it is recommended to run with `readsb`, and this is the deployment method that will be used in this guide.
+The docker image [`ghcr.io/sdr-enthusiasts/docker-piaware`](https://github.com/sdr-enthusiasts/docker-piaware) contains `piaware` and all of its required prerequisites and libraries. This can run standalone \(without the `ultrafeeder` container\), however for flexibility it is recommended to run with `ultrafeeder`, and this is the deployment method that will be used in this guide.
 
 ## Getting a Feeder ID
 
@@ -33,17 +33,17 @@ You'll need a _feeder-id_. To get one, you can temporarily run the container, to
 Inside your application directory \(`/opt/adsb`\), run the following commands:
 
 ```text
-docker pull mikenye/piaware:latest
+docker pull ghcr.io/sdr-enthusiasts/docker-piaware:latest
 source ./.env
-timeout 60 docker run --rm -e LAT="$FEEDER_LAT" -e LONG="$FEEDER_LONG" mikenye/piaware:latest | grep "my feeder ID"
+timeout 60 docker run --rm -e LAT="$FEEDER_LAT" -e LONG="$FEEDER_LONG" ghcr.io/sdr-enthusiasts/docker-piaware:latest | grep "my feeder ID"
 ```
 
-The command will run the container for 30 seconds, which should be ample time for the container to receive a feeder-id.
+The command will run the container for 60 seconds, which should be ample time for the container to receive a feeder-id.
 
 For example:
 
 ```text
-$ timeout 30 docker run --rm LAT="$FEEDER_LAT" -e LONG="$FEEDER_LONG" mikenye/piaware:latest | grep "my feeder ID"
+$ timeout 60 docker run --rm LAT="$FEEDER_LAT" -e LONG="$FEEDER_LONG" ghcr.io/sdr-enthusiasts/docker-piaware:latest | grep "my feeder ID"
 Set allow-mlat to yes in /etc/piaware.conf:1
 Set allow-modeac to yes in /etc/piaware.conf:2
 Set allow-auto-updates to no in /etc/piaware.conf:3
@@ -83,22 +83,20 @@ PIAWARE_FEEDER_ID=acbf1f88-09a4-3a47-a4a0-10ae138d0c1g
 
 ## Deploying piaware feeder
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file \(inside the `services:` section\):
 
 ```yaml
   piaware:
-    image: mikenye/piaware:latest
+    image: ghcr.io/sdr-enthusiasts/docker-piaware:latest
     tty: true
     container_name: piaware
     restart: always
-    depends_on:
-      - readsb
     ports:
       - 8081:8080
     environment:
-      - BEASTHOST=readsb
+      - BEASTHOST=ultrafeeder
       - LAT=${FEEDER_LAT}
       - LONG=${FEEDER_LONG}
       - TZ=${FEEDER_TZ}
@@ -117,9 +115,9 @@ If you are in the USA and are also running the `dump978` container with a second
 
 To explain what's going on in this addition:
 
-* We're creating a container called `piaware`, from the image `mikenye/piaware:latest`.
+* We're creating a container called `piaware`, from the image `ghcr.io/sdr-enthusiasts/docker-piaware:latest`.
 * We're passing several environment variables to the container:
-  * `BEASTHOST=readsb` to inform the feeder to get its ADSB data from the container `readsb` over our private `adsbnet` network.
+  * `BEASTHOST=ultrafeeder` to inform the feeder to get its ADSB data from the container `ultrafeeder` over our private `adsbnet` network.
   * `LAT` will use the `FEEDER_LAT` variable from your `.env` file.
   * `LONG` will use the `FEEDER_LONG` variable from your `.env` file.
   * `TZ` will use the `FEEDER_TZ` variable from your `.env` file.
@@ -131,15 +129,28 @@ To explain what's going on in this addition:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `piaware` container. You should see the following output:
+## Update `ultrafeeder` container configuration
+
+Before running `docker compose`, we also want to update the configuration of the `ultrafeeder` container, so that it generates MLAT data for piaware.
+
+Open the `docker-compose.yml` and make the following environment value is part of the `ULTRAFEEDER_CONFIG` variable to the `ultrafeeder` service:
+
+```yaml
+      - ULTRAFEEDER_CONFIG=mlathub,piaware,30105,beast_in;
+```
+
+To explain this addition, the `ultrafeeder` container will connect to the `piaware` container on port `30105` and receive MLAT data. This data will then be included in any outbound data streams from `ultrafeeder`.
+
+## Refresh running containers
+
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `piaware` container. You should see the following output:
 
 ```text
-readsb is up-to-date
-adsbx is up-to-date
+ultrafeeder is up-to-date
 Creating piaware
 ```
 
-We can view the logs for the environment with the command `docker-compose logs`, or continually "tail" them with `docker-compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
+We can view the logs for the environment with the command `docker compose logs`, or continually "tail" them with `docker compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
 
 ```text
 piaware           | [s6-init] making user provided files available at /var/run/s6/etc...exited 0.
@@ -154,7 +165,7 @@ piaware           | Set allow-manual-updates to no in /etc/piaware.conf:3
 piaware           | Set allow-mlat to yes in /etc/piaware.conf:4
 piaware           | Set mlat-results to yes in /etc/piaware.conf:5
 piaware           | Set receiver-type to relay in /etc/piaware.conf:6
-piaware           | Set receiver-host to readsb in /etc/piaware.conf:7
+piaware           | Set receiver-host to ultrafeeder in /etc/piaware.conf:7
 piaware           | Set receiver-port to 30005 in /etc/piaware.conf:8
 piaware           | [cont-init.d] 01-piaware: exited 0.
 piaware           | [cont-init.d] done.
@@ -165,8 +176,8 @@ piaware           | [skyaware] 2020/11/20 14:51:15 2020-11-20 14:51:15: (server.
 piaware           | [dump1090] 2020/11/20 14:51:15 Fri Nov 20 14:51:15 2020 AWST  dump1090-fa unknown starting up.
 piaware           | [dump1090] 2020/11/20 14:51:15 Net-only mode, no SDR device or file open.
 piaware           | [beast-splitter] 2020/11/20 14:51:15 127.0.0.1:30004: connected to 127.0.0.1:30004 with settings
-piaware           | [beast-splitter] 2020/11/20 14:51:15 net(readsb:30005): connected to 172.30.0.12:30005
-piaware           | [beast-splitter] 2020/11/20 14:51:15 net(readsb:30005): configured with settings: BCdfGijk
+piaware           | [beast-splitter] 2020/11/20 14:51:15 net(ultrafeeder:30005): connected to 172.30.0.12:30005
+piaware           | [beast-splitter] 2020/11/20 14:51:15 net(ultrafeeder:30005): configured with settings: BCdfGijk
 piaware           | [piaware] 2020/11/20 14:51:15 ****************************************************
 piaware           | [piaware] 2020/11/20 14:51:15 piaware version 4.0 is running, process ID 329
 piaware           | [piaware] 2020/11/20 14:51:15 your system info is: Linux 4e041cdad755 4.4.0-179-generic #209-Ubuntu SMP Fri Apr 24 17:48:44 UTC 2020 x86_64 GNU/Linux
@@ -175,7 +186,7 @@ piaware           | [piaware] 2020/11/20 14:51:17 Connection with adept server a
 piaware           | [piaware] 2020/11/20 14:51:18 TLS handshake with adept server at piaware.flightaware.com/1200 completed
 piaware           | [piaware] 2020/11/20 14:51:18 FlightAware server certificate validated
 piaware           | [piaware] 2020/11/20 14:51:18 encrypted session established with FlightAware
-piaware           | [beast-splitter] 2020/11/20 14:51:18 net(readsb:30005): connected to a Beast-style receiver
+piaware           | [beast-splitter] 2020/11/20 14:51:18 net(ultrafeeder:30005): connected to a Beast-style receiver
 piaware           | [piaware] 2020/11/20 14:51:18 ADS-B data program 'dump1090' is listening on port 30005, so far so good
 piaware           | [piaware] 2020/11/20 14:51:18 Starting faup1090: /usr/lib/piaware/helpers/faup1090 --net-bo-ipaddr localhost --net-bo-port 30005 --stdout --lat -33.333 --lon 111.111
 piaware           | [piaware] 2020/11/20 14:51:18 Started faup1090 (pid 354) to connect to dump1090
@@ -201,7 +212,6 @@ piaware           | [piaware] 2020/11/20 14:51:19 piaware has successfully sent 
 
 We can see our container running with the command `docker ps`.
 
-Once running, you can visit `http://docker.host.ip.addr:8081/` to access PiAware's "SkyAware". From there you need to configure your location and altitude on the FlightAware's website. To do this, click on the blue button marked `Go to my ADS-B Statistics Page` on your "SkyAware". When the FA website loads, click on the gear icon near your feeder name and configure your location and height *using the same values you set in your .env file*. If you do not configure these values via the FA website MLAT will not work for your PiAware feeder.  You can also log onto FlightAware's website and click on the `My ADSB` link at the top of the page, and see your statistics, configure your location and altitude and other settings.
+Once running, you can visit `http://docker.host.ip.addr:8081/` to access PiAware's "SkyAware". From there you need to configure your location and altitude on the FlightAware's website. To do this, click on the blue button marked `Go to my ADS-B Statistics Page` on your "SkyAware". When the FA website loads, click on the gear icon near your feeder name and configure your location and height _using the same values you set in your .env file_. If you do not configure these values via the FA website MLAT will not work for your PiAware feeder.  You can also log onto FlightAware's website and click on the `My ADSB` link at the top of the page, and see your statistics, configure your location and altitude and other settings.
 
-Remember, if you change your location and altitude on FlightAware's website, you'll need to update your `.env` file locally \(and re-run `docker-compose up -d` from your application directory\)!
-
+Remember, if you change your location and altitude on FlightAware's website, you'll need to update your `.env` file locally \(and re-run `docker compose up -d` from your application directory\)!

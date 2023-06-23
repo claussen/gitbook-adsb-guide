@@ -10,7 +10,7 @@ description: >-
 In your favourite text editor, create a file named `docker-compose.yml` in your application directory \(`/opt/adsb`\) if following along verbatim.
 
 ```bash
-sudo nano docker-compose.yml
+nano docker-compose.yml
 ```
 
 ```yaml
@@ -22,7 +22,7 @@ volumes:
 
 services:
   readsb:
-    image: mikenye/readsb-protobuf:latest
+    image: ghcr.io/sdr-enthusiasts/docker-readsb-protobuf:latest
     tty: true
     container_name: readsb
     hostname: readsb
@@ -52,18 +52,19 @@ services:
 The above will:
 
 * Create two docker volumes, `readsbpb_rrd` and `readsb_autogain`, which are used to store the RRD files and autogain state files respectively.
-* Create a service named `readsb` that will run the `mikenye/readsb-protobuf` container.
+* Create a service named `readsb` that will run the `ghcr.io/sdr-enthusiasts/docker-readsb-protobuf` container.
   * We're presenting the USB bus through to this container \(so `readsb` can talk to the USB-attached SDR\).
   * We're mapping TCP port `8080` through to the container so we can access the web interface.
+  * The variable `READSB_RTLSDR_DEVICE` tells `readsb` to look for an RTLSDR device with the serial of `1090` (that we re-serialized in an earlier step).
   * We're passing several environment variables through, including our timezone, latitude and longitude from the `.env` file \(denoted by `${VARIABLE}`\).
 * We're using `tmpfs` for volumes that have regular I/O. Any files stored in a `tmpfs` mount are temporarily stored outside the container's writable layer. This helps to reduce:
   * The size of the container, by not writing changes to the underlying container; and
   * SD Card or SSD wear
 
-Once this file is created, issue the command `sudo docker-compose up -d` to bring up the environment.
+Once this file is created, issue the command `docker compose up -d` to bring up the environment.
 
 ```bash
-sudo docker-compose up -d
+docker compose up -d
 ```
 
 You should see the following output:
@@ -73,7 +74,7 @@ Creating network "adsb_default" with the default driver
 Creating readsb         ... done
 ```
 
-We can view the logs for the environment with the command `docker-compose logs`, or continually "tail" them with `docker-compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
+We can view the logs for the environment with the command `docker compose logs`, or continually "tail" them with `docker compose logs -f`. At this stage, the logs will be fairly unexciting and look like this:
 
 ```text
 [s6-init] making user provided files available at /var/run/s6/etc...exited 0.
@@ -106,8 +107,8 @@ We can view the logs for the environment with the command `docker-compose logs`,
 We can see our container running with the command `docker ps`:
 
 ```text
-CONTAINER ID        IMAGE                               COMMAND             CREATED             STATUS                    PORTS                    NAMES
-f936a37dd488        mikenye/readsb-protobuf:latest      "/init"             4 hours ago         Up 2 hours (healthy)      0.0.0.0:8080->8080/tcp   readsb
+CONTAINER ID   IMAGE                                                   COMMAND   CREATED        STATUS                  PORTS                                       NAMES
+7b9c4be5a410   ghcr.io/sdr-enthusiasts/docker-readsb-protobuf:latest   "/init"   17 hours ago   Up 17 hours (healthy)   0.0.0.0:8080->8080/tcp, :::8080->8080/tcp   readsb
 ```
 
 We can see the `adsb_default` network with the command `docker network ls`:
@@ -166,3 +167,11 @@ Press `CTRL-C` to escape this screen.
 
 You should also be able to point your web browser at `http://docker.host.ip.addr:8080/` to view the web interface \(change `docker.host.ip.addr` to the IP address of your docker host\). You should see a map showing your currently tracked aircraft, and a link to the "Performance Graphs".
 
+It is possible that you won't see any planes, either with the docker command above or when pointing your web browser at the readsb container. This can have a number of root causes - a common one being that active radio transmissions in other frequency bands that are reasonably "close" to the ADS-B band are completely overwhelming your SDR at the default starting gain of 49.6. It may be necessary to lower the starting point for the autogain script to at least allow the detection of some planes in order for the script to work. So if even after a few minutes you don't see any planes at all (and no ADS-B messages in the "Performance Graphs"), you may want to try to force a lower starting gain value into the autogain algorithm. To do this, please execute the following command. You may have to try different values instead of the value of `34` suggested here:
+
+```bash
+docker exec -it readsb sh -c "/bin/echo 34 > /run/autogain/autogain_current_value"
+docker restart readsb
+```
+
+This first changes the gain value that the autogain script should try next and then stops and restarts the `readasb` container.

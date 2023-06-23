@@ -6,13 +6,13 @@ description: >-
 
 # Improved Visualisation with tar1090
 
-[`tar1090`](https://github.com/wiedehopf/tar1090) is a visualisation tool by [wiedehopf](https://github.com/wiedehopf) that provides some additional functionality over and above the `readsb` web interface.
+[`tar1090`](https://github.com/wiedehopf/tar1090) is a visualisation tool by [wiedehopf](https://github.com/wiedehopf) that provides some additional functionality over and above the `ultrafeeder` web interface.
 
 This is my personal preference for displaying real-time ADS-B information.
 
 ## Create docker volumes
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Add the following lines to the  `volumes:` section at the top of the file \(below the `version:` section, and before the `services:` section\):
 
@@ -24,20 +24,20 @@ This creates the volumes that will contain `tar1090`’s application data.
 
 ## Deploying `tar1090` container
 
-Open the `docker-compose.yml` file that was created when deploying `readsb`.
+Open the `docker-compose.yml` file that was created when deploying `ultrafeeder`.
 
 Append the following lines to the end of the file:
 
 ```yaml
   tar1090:
-    image: mikenye/tar1090:latest
+    image: ghcr.io/sdr-enthusiasts/docker-tar1090:latest
     tty: true
     container_name: tar1090
     restart: always
     environment:
       - UPDATE_TAR1090=false
       - TZ=${FEEDER_TZ}
-      - BEASTHOST=readsb
+      - BEASTHOST=ultrafeeder
       - LAT=${FEEDER_LAT}
       - LONG=${FEEDER_LONG}
       - TAR1090_DEFAULTCENTERLAT=${FEEDER_LAT}
@@ -51,7 +51,7 @@ Append the following lines to the end of the file:
       - /var/log
 ```
 
-Once the file has been updated, issue the command `docker-compose up -d` in the application directory to apply the changes and bring up the `tar1090` container.
+Once the file has been updated, issue the command `docker compose up -d` in the application directory to apply the changes and bring up the `tar1090` container.
 
 You should also be able to point your web browser at:
 
@@ -70,4 +70,3 @@ Add the following line to the environment section of the `tar1090` section of `d
 ```
 
 The above assumes you wish to display MLAT from the `adsbx` image. You could use `MLATHOST=piaware` if you wish to use the `piaware` image.
-
